@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nebula - Server Watcher</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #818cf8;
+            --primary-glow: rgba(129, 140, 248, 0.4);
+            --success: #34d399;
+            --warning: #fbbf24;
+            --danger: #fb7185;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.6);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --glass: rgba(15, 23, 42, 0.7);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            color: var(--text-main);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* Glass Overlay for Login */
+        #login-overlay {
+            position: fixed; inset: 0;
+            background: rgba(2, 6, 23, 0.85);
+            backdrop-filter: blur(12px);
+            z-index: 2000;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .login-card {
+            background: var(--card-bg);
+            padding: 3rem;
+            border-radius: 1.5rem;
+            border: 1px solid var(--card-border);
+            width: 100%; max-width: 420px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+        }
+        .login-card h3 { font-size: 1.75rem; margin-bottom: 0.5rem; letter-spacing: -0.025em; }
+        .login-input {
+            width: 100%; padding: 0.875rem 1.25rem;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--card-border);
+            border-radius: 0.75rem;
+            color: white; margin: 1.5rem 0;
+            font-size: 1rem; transition: border-color 0.2s;
+        }
+        .login-input:focus { outline: none; border-color: var(--primary); }
+        .login-btn {
+            width: 100%; padding: 0.875rem;
+            background: var(--primary); color: white;
+            border: none; border-radius: 0.75rem;
+            font-weight: 600; cursor: pointer;
+            box-shadow: 0 4px 12px var(--primary-glow);
+            transition: transform 0.2s, background 0.2s;
+        }
+        .login-btn:hover { background: #6366f1; transform: translateY(-1px); }
+
+        header {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--card-border);
+            padding: 1.25rem 0;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .logo { font-size: 1.5rem; font-weight: 800; background: linear-gradient(to right, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+
+        /* Summary Stats */
+        .stats-overview {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem; margin-bottom: 2.5rem;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1.25rem; padding: 1.5rem;
+            display: flex; flex-direction: column;
+            transition: transform 0.3s;
+        }
+        .stat-card:hover { transform: translateY(-5px); border-color: rgba(129, 140, 248, 0.3); }
+        .stat-label { font-size: 0.875rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-val { font-size: 2rem; font-weight: 800; margin-top: 0.5rem; }
+
+        .toolbar { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        select {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 0.75rem 2rem 0.75rem 1rem;
+            border-radius: 0.75rem;
+            cursor: pointer; appearance: none;
+            min-width: 180px; font-weight: 500;
+        }
+        .select-wrapper { position: relative; }
+        .select-wrapper::after { content: '↓'; position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); font-size: 0.8rem; color: var(--text-muted); pointer-events: none; }
+
+        .chart-container {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1.5rem; padding: 2rem;
+            margin-bottom: 3rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Country Group & VPS List */
+        .country-section { margin-bottom: 3rem; }
+        .country-header {
+            display: flex; align-items: center; gap: 1rem;
+            margin-bottom: 1.5rem; font-size: 1.25rem; font-weight: 700;
+        }
+        .country-line { flex: 1; height: 1px; background: linear-gradient(to right, var(--card-border), transparent); }
+        
+        .vps-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.25rem;
+        }
+        .vps-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1.25rem; padding: 1.5rem;
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative; overflow: hidden;
+        }
+        .vps-card:hover {
+            border-color: var(--primary);
+            background: rgba(47, 61, 91, 0.6);
+            transform: scale(1.02);
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+        }
+        .vps-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+        .vps-name-box { display: flex; flex-direction: column; }
+        .vps-name { font-weight: 700; font-size: 1.125rem; color: #fff; }
+        .vps-ip { font-size: 0.8125rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 0.25rem; }
+        
+        .status-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            position: relative;
+        }
+        .status-dot::after {
+            content: ''; position: absolute; inset: -4px;
+            border-radius: 50%; background: inherit; opacity: 0.4;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 0.4; } 100% { transform: scale(2.5); opacity: 0; } }
+
+        .ping-stats {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem; margin-top: 1.25rem;
+            padding-top: 1.25rem; border-top: 1px solid var(--card-border);
+        }
+        .ping-item { display: flex; flex-direction: column; align-items: center; }
+        .ping-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 2px; }
+        .ping-value { font-size: 0.85rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+
+        /* Status Colors */
+        .color-min { color: var(--success); }
+        .color-avg { color: var(--primary); }
+        .color-med { color: var(--warning); }
+        .color-max { color: var(--danger); }
+        .bg-success { background: var(--success); }
+        .bg-warning { background: var(--warning); }
+        .bg-danger { background: var(--danger); }
+
+        #refresh-timer { font-size: 0.8125rem; color: var(--text-muted); font-weight: 500; }
+        .btn-sync {
+            padding: 0.625rem 1.25rem; background: transparent;
+            border: 1px solid var(--card-border); border-radius: 0.75rem;
+            color: var(--text-main); font-weight: 600; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-sync:hover { background: var(--card-bg); border-color: var(--primary); }
+
+        footer {
+            margin-top: 4rem;
+            padding: 3rem 0;
+            border-top: 1px solid var(--card-border);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            background: rgba(15, 23, 42, 0.3);
+            backdrop-filter: blur(8px);
+        }
+        footer span { font-weight: 700; letter-spacing: 0.05em; color: var(--text-main); }
+    </style>
+</head>
+<body>
+    <div id="login-overlay" style="display: none;">
+        <div class="login-card">
+            <h3>Nebula Control</h3>
+            <p style="color: var(--text-muted);">Secure access required</p>
+            <input type="password" id="password-input" class="login-input" placeholder="Enter Access Password">
+            <button onclick="login()" class="login-btn">Authenticate</button>
+        </div>
+    </div>
+
+    <header>
+        <div style="max-width: 1400px; margin: 0 auto; width: 100%; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center;">
+            <div class="logo">NEBULA WATCHER</div>
+            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                <span id="refresh-timer">Ready</span>
+                <button onclick="updateChart()" class="btn-sync">Sync Nodes</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="stats-overview">
+            <div class="stat-card">
+                <span class="stat-label">Total Nodes</span>
+                <span id="stat-total" class="stat-val">--</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Global Avg Ping</span>
+                <span id="stat-avg" class="stat-val" style="color: var(--primary);">--</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Fastest Node</span>
+                <span id="stat-fastest" class="stat-val" style="color: var(--success); font-size: 1.25rem; margin-top: 1rem;">--</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Unstable</span>
+                <span id="stat-unstable" class="stat-val" style="color: var(--danger);">--</span>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="select-wrapper">
+                <select id="vps-select" onchange="handleVPSChange()">
+                    <option value="">Global Overview</option>
+                </select>
+            </div>
+            <div class="select-wrapper">
+                <select id="time-select" onchange="updateChart()">
+                    <option value="1h">Last 1 Hour</option>
+                    <option value="6h">Last 6 Hours</option>
+                    <option value="24h" selected>Last 24 Hours</option>
+                    <option value="168h">Last 7 Days</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="font-weight: 700;">Latency Topology (ms)</h3>
+                <div id="chart-legend" style="display: flex; gap: 1rem;"></div>
+            </div>
+            <div style="height: 420px; position: relative;"><canvas id="latencyChart"></canvas></div>
+        </div>
+
+        <div id="vps-list-container"></div>
+    </div>
+
+    <footer>
+        <div style="max-width: 1400px; margin: 0 auto; padding: 0 2rem;">
+            <p>&copy; 2026 <span>NEBULA WATCHER</span>. All rights reserved.</p>
+            <p style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.6;">High-performance server latency monitoring system.</p>
+        </div>
+    </footer>
+
+    <script>
+        let password = localStorage.getItem('watcher_password');
+        let chart = null;
+        let vpsList = [];
+        let lastStats = {};
+
+        window.onload = function() {
+            if (!password || password === 'null') {
+                document.getElementById('login-overlay').style.display = 'flex';
+            } else {
+                init();
+            }
+        };
+
+        function login() {
+            const input = document.getElementById('password-input').value;
+            if (!input) return;
+            password = input;
+            localStorage.setItem('watcher_password', password);
+            document.getElementById('login-overlay').style.display = 'none';
+            init();
+        }
+
+        async function apiFetch(url) {
+            if (!password) return null;
+            try {
+                const res = await fetch(url, { headers: { 'X-Password': password } });
+                if (res.status === 401) {
+                    localStorage.removeItem('watcher_password');
+                    password = null;
+                    document.getElementById('login-overlay').style.display = 'flex';
+                    return null;
+                }
+                return await res.json();
+            } catch (err) { return null; }
+        }
+
+        async function init() {
+            const data = await apiFetch('/api/vps');
+            if (!data) return;
+            vpsList = data;
+            
+            const select = document.getElementById('vps-select');
+            vpsList.forEach(vps => {
+                const opt = document.createElement('option');
+                opt.value = vps.id; opt.textContent = vps.name;
+                select.appendChild(opt);
+            });
+
+            document.getElementById('stat-total').textContent = vpsList.length;
+
+            renderVPSList();
+            updateChart();
+            setInterval(updateChart, 60000);
+        }
+
+        function renderVPSList() {
+            const container = document.getElementById('vps-list-container');
+            container.innerHTML = '';
+
+            const groups = {};
+            vpsList.forEach(vps => {
+                const country = vps.country || 'Global';
+                if (!groups[country]) groups[country] = [];
+                groups[country].push(vps);
+            });
+
+            Object.keys(groups).sort().forEach(country => {
+                const groupSection = document.createElement('div');
+                groupSection.className = 'country-section';
+                
+                groupSection.innerHTML = `
+                    <div class="country-header">
+                        <span>${country}</span>
+                        <div class="country-line"></div>
+                    </div>
+                    <div class="vps-grid"></div>
+                `;
+
+                const grid = groupSection.querySelector('.vps-grid');
+                
+                groups[country].forEach(vps => {
+                    const stats = lastStats[vps.id];
+                    const card = document.createElement('div');
+                    card.className = 'vps-card';
+                    
+                    let statusClass = 'bg-success';
+                    if (stats && stats.med > 200) statusClass = 'bg-warning';
+                    if (stats && stats.med > 500) statusClass = 'bg-danger';
+
+                    let statsHtml = `
+                        <div class="ping-stats" style="opacity: 0.5;">
+                            <div class="ping-item"><span class="ping-label">MIN</span><span class="ping-value">--</span></div>
+                            <div class="ping-item"><span class="ping-label">MED</span><span class="ping-value">--</span></div>
+                            <div class="ping-item"><span class="ping-label">AVG</span><span class="ping-value">--</span></div>
+                            <div class="ping-item"><span class="ping-label">MAX</span><span class="ping-value">--</span></div>
+                        </div>
+                    `;
+
+                    if (stats) {
+                        statsHtml = `
+                            <div class="ping-stats">
+                                <div class="ping-item"><span class="ping-label">MIN</span><span class="ping-value color-min">${stats.min.toFixed(0)}</span></div>
+                                <div class="ping-item"><span class="ping-label">MED</span><span class="ping-value color-med">${stats.med.toFixed(0)}</span></div>
+                                <div class="ping-item"><span class="ping-label">AVG</span><span class="ping-value color-avg">${stats.avg.toFixed(0)}</span></div>
+                                <div class="ping-item"><span class="ping-label">MAX</span><span class="ping-value color-max">${stats.max.toFixed(0)}</span></div>
+                            </div>
+                        `;
+                    }
+
+                    card.innerHTML = `
+                        <div class="vps-card-header">
+                            <div class="vps-name-box">
+                                <span class="vps-name">${vps.name}</span>
+                                <span class="vps-ip">${vps.ip}</span>
+                            </div>
+                            <div class="status-dot ${statusClass}"></div>
+                        </div>
+                        ${statsHtml}
+                    `;
+                    card.onclick = () => { window.location.href = '/vps?id=' + vps.id; };
+                    grid.appendChild(card);
+                });
+
+                container.appendChild(groupSection);
+            });
+        }
+
+        async function updateChart() {
+            if (!password) return;
+            const vpsID = document.getElementById('vps-select').value;
+            const since = document.getElementById('time-select').value;
+            const stats = await apiFetch(`/api/stats?vps_id=${vpsID}&since=${since}`);
+            if (!stats) return;
+
+            // Update stats logic
+            const newest = {};
+            let totalPing = 0;
+            let count = 0;
+            let fastest = { name: '--', val: Infinity };
+            let unstableCount = 0;
+
+            stats.forEach(s => {
+                if (!newest[s.vps_id]) {
+                    newest[s.vps_id] = {
+                        min: s.min_latency, avg: s.average_latency,
+                        med: s.median_latency, max: s.max_latency
+                    };
+                    totalPing += s.median_latency;
+                    count++;
+                    if (s.median_latency < fastest.val) {
+                        const v = vpsList.find(x => x.id === s.vps_id);
+                        fastest = { name: v ? v.name : 'Unknown', val: s.median_latency };
+                    }
+                    if (s.median_latency > 300) unstableCount++;
+                }
+            });
+
+            lastStats = newest;
+            document.getElementById('stat-avg').textContent = count > 0 ? (totalPing / count).toFixed(1) + ' ms' : '--';
+            document.getElementById('stat-fastest').textContent = fastest.name + ' (' + fastest.val.toFixed(0) + 'ms)';
+            document.getElementById('stat-unstable').textContent = unstableCount;
+
+            renderVPSList();
+
+            const ctx = document.getElementById('latencyChart').getContext('2d');
+            if (chart) chart.destroy();
+
+            const groups = {};
+            stats.forEach(s => { if(!groups[s.vps_id]) groups[s.vps_id] = []; groups[s.vps_id].push(s); });
+
+            const colors = ['#818cf8', '#34d399', '#fbbf24', '#fb7185', '#c084fc', '#22d3ee', '#f472b6'];
+            const datasets = Object.keys(groups).map((id, idx) => {
+                const info = vpsList.find(v => v.id === id);
+                const color = colors[idx % colors.length];
+                return {
+                    label: info ? info.name : id,
+                    data: groups[id].map(s => ({ x: new Date(s.timestamp), y: s.median_latency })),
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    borderWidth: 2
+                };
+            });
+
+            chart = new Chart(ctx, {
+                type: 'line', data: { datasets },
+                options: { 
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    interaction: { mode: 'index', intersect: false },
+                    scales: { 
+                        x: { type: 'time', grid: { display: false }, ticks: { color: '#64748b' } },
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } }
+                    }
+                }
+            });
+            document.getElementById('refresh-timer').textContent = 'Synced ' + new Date().toLocaleTimeString();
+        }
+
+        function handleVPSChange() {
+            const vpsID = document.getElementById('vps-select').value;
+            if (vpsID) { window.location.href = '/vps?id=' + vpsID; } else { updateChart(); }
+        }
+    </script>
+</body>
+</html>

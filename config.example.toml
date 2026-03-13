@@ -1,0 +1,16 @@
+[server]
+port = 9090
+
+[[vps_list]]
+id = "example-node-1"
+name = "Example Server 1"
+ip = "1.1.1.1"
+country = "US"
+remarks = "Example remarks"
+
+[[vps_list]]
+id = "example-node-2"
+name = "Example Server 2"
+ip = "8.8.8.8"
+country = "Global"
+remarks = ""

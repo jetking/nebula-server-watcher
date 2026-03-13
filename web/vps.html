@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nebula - Node Details</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #818cf8;
+            --primary-glow: rgba(129, 140, 248, 0.4);
+            --success: #34d399;
+            --warning: #fbbf24;
+            --danger: #fb7185;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.6);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --glass: rgba(15, 23, 42, 0.7);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at top left, #1e293b, #0f172a);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--card-border);
+            padding: 1.25rem 0;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .nav-left { display: flex; gap: 1.5rem; align-items: center; }
+        .back-btn {
+            text-decoration: none; color: var(--text-muted);
+            font-size: 0.875rem; font-weight: 600;
+            display: flex; align-items: center; gap: 0.5rem;
+            transition: color 0.2s;
+        }
+        .back-btn:hover { color: var(--primary); }
+
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 2rem; }
+
+        .info-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem; margin-bottom: 2rem;
+        }
+        .info-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem; padding: 1.25rem;
+        }
+        .info-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
+        .info-val { font-size: 1.125rem; font-weight: 700; margin-top: 0.25rem; display: block; }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1.5rem; padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .section-title h2 { font-size: 1.5rem; font-weight: 800; }
+        .section-title p { color: var(--text-muted); font-size: 0.875rem; }
+
+        select {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 0.625rem 2rem 0.625rem 1rem;
+            border-radius: 0.75rem;
+            cursor: pointer; appearance: none;
+            font-weight: 600;
+        }
+
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        th { text-align: left; padding: 1rem; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid var(--card-border); }
+        td { padding: 1rem; font-size: 0.875rem; border-bottom: 1px solid var(--card-border); transition: background 0.2s; }
+        tr:hover td { background: rgba(255, 255, 255, 0.03); }
+        .latency-badge { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+
+        #refresh-timer { font-size: 0.8125rem; color: var(--text-muted); }
+
+        footer {
+            margin-top: 4rem;
+            padding: 3rem 0;
+            border-top: 1px solid var(--card-border);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            background: rgba(15, 23, 42, 0.3);
+            backdrop-filter: blur(8px);
+        }
+        footer span { font-weight: 700; letter-spacing: 0.05em; color: var(--text-main); }
+    </style>
+</head>
+<body>
+    <header>
+        <div style="max-width: 1200px; margin: 0 auto; width: 100%; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center;">
+            <div class="nav-left">
+                <a href="/" class="back-btn">← DASHBOARD</a>
+                <div style="position: relative;">
+                    <select id="vps-select" onchange="window.location.href='/vps?id='+this.value"></select>
+                </div>
+            </div>
+            <div id="refresh-timer">Syncing node data...</div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div id="vps-info" class="info-grid">
+            <div class="info-card"><span class="info-label">Node Name</span><span id="info-name" class="info-val">-</span></div>
+            <div class="info-card"><span class="info-label">Network IP</span><span id="info-ip" class="info-val" style="font-family: monospace;">-</span></div>
+            <div class="info-card"><span class="info-label">Geolocation</span><span id="info-country" class="info-val">-</span></div>
+            <div class="info-card"><span class="info-label">Internal ID</span><span id="info-id" class="info-val" style="font-size: 0.75rem; opacity: 0.5;">-</span></div>
+        </div>
+
+        <div class="card">
+            <div class="section-header">
+                <div class="section-title">
+                    <h2 id="chart-title">Latency Analytics</h2>
+                    <p>Cross-period performance metrics</p>
+                </div>
+                <div>
+                    <select id="time-select" onchange="updateView()">
+                        <option value="1h">Last 1 Hour</option>
+                        <option value="6h">Last 6 Hours</option>
+                        <option value="24h" selected>Last 24 Hours</option>
+                        <option value="168h">Last 7 Days</option>
+                    </select>
+                </div>
+            </div>
+            <div style="height: 450px;"><canvas id="latencyChart"></canvas></div>
+        </div>
+
+        <div class="card">
+            <div class="section-header">
+                <div class="section-title">
+                    <h3>Historical Records</h3>
+                    <p>Latest 100 snapshots from this node</p>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Snapshot Time</th>
+                            <th>Min</th>
+                            <th>Avg</th>
+                            <th>Median</th>
+                            <th>Max</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div style="max-width: 1200px; margin: 0 auto; padding: 0 2rem;">
+            <p>&copy; 2026 <span>NEBULA WATCHER</span>. All rights reserved.</p>
+            <p style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.6;">High-performance server latency monitoring system.</p>
+        </div>
+    </footer>
+
+    <script>
+        let password = localStorage.getItem('watcher_password');
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentID = urlParams.get('id');
+        let chart = null;
+        let vpsList = [];
+
+        window.onload = function() {
+            if (!password || password === 'null' || !currentID) {
+                window.location.replace('/');
+            } else {
+                init();
+            }
+        };
+
+        async function apiFetch(url) {
+            try {
+                const res = await fetch(url, { headers: { 'X-Password': password } });
+                if (res.status === 401) {
+                    localStorage.removeItem('watcher_password');
+                    window.location.replace('/');
+                    return null;
+                }
+                return await res.json();
+            } catch (e) { return null; }
+        }
+
+        async function init() {
+            const data = await apiFetch('/api/vps');
+            if (!data) return;
+            vpsList = data;
+            
+            const select = document.getElementById('vps-select');
+            vpsList.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v.id; opt.textContent = v.name; opt.selected = (v.id === currentID);
+                select.appendChild(opt);
+            });
+
+            updateView();
+            setInterval(updateView, 60000);
+        }
+
+        async function updateView() {
+            const vps = vpsList.find(v => v.id === currentID);
+            if (vps) {
+                document.getElementById('info-name').textContent = vps.name;
+                document.getElementById('info-ip').textContent = vps.ip;
+                document.getElementById('info-country').textContent = vps.country;
+                document.getElementById('info-id').textContent = vps.id;
+                document.getElementById('chart-title').textContent = vps.name + ' Performance';
+            }
+
+            const since = document.getElementById('time-select').value;
+            const stats = await apiFetch(`/api/stats?vps_id=${currentID}&since=${since}`);
+            if (!stats) return;
+
+            renderChart(stats);
+            renderTable(stats.slice(0, 100));
+            document.getElementById('refresh-timer').textContent = 'Last synced: ' + new Date().toLocaleTimeString();
+        }
+
+        function renderChart(stats) {
+            const ctx = document.getElementById('latencyChart').getContext('2d');
+            if (chart) chart.destroy();
+            
+            const gradientMin = ctx.createLinearGradient(0, 0, 0, 400);
+            gradientMin.addColorStop(0, 'rgba(52, 211, 153, 0.2)');
+            gradientMin.addColorStop(1, 'rgba(52, 211, 153, 0)');
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: stats.map(s => new Date(s.timestamp)),
+                    datasets: [
+                        { label: 'Max', data: stats.map(s => s.max_latency), borderColor: '#fb7185', borderWidth: 1, pointRadius: 0, tension: 0.4 },
+                        { label: 'Avg', data: stats.map(s => s.average_latency), borderColor: '#818cf8', borderWidth: 3, pointRadius: 0, tension: 0.4 },
+                        { label: 'Median', data: stats.map(s => s.median_latency), borderColor: '#fbbf24', borderWidth: 2, pointRadius: 0, tension: 0.4 },
+                        { label: 'Min', data: stats.map(s => s.min_latency), borderColor: '#34d399', borderWidth: 1, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: gradientMin }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', weight: 600 } } } },
+                    interaction: { mode: 'index', intersect: false },
+                    scales: { 
+                        x: { type: 'time', grid: { display: false }, ticks: { color: '#64748b' } },
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } } 
+                    } 
+                }
+            });
+        }
+
+        function renderTable(stats) {
+            document.getElementById('logs-body').innerHTML = stats.map(s => `
+                <tr>
+                    <td style="color: var(--text-muted); font-size: 0.8rem;">${new Date(s.timestamp).toLocaleString()}</td>
+                    <td class="latency-badge" style="color: var(--success)">${s.min_latency}ms</td>
+                    <td class="latency-badge" style="color: var(--primary)">${s.average_latency.toFixed(1)}ms</td>
+                    <td class="latency-badge" style="color: var(--warning)">${s.median_latency}ms</td>
+                    <td class="latency-badge" style="color: var(--danger)">${s.max_latency}ms</td>
+                </tr>
+            `).join('');
+        }
+    </script>
+</body>
+</html>

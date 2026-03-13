@@ -1,0 +1,18 @@
+# Binaries
+server-watcher
+_bin/
+_bin/*
+_data
+
+# Database
+stats.db
+stats.db-journal
+stats.db-shm
+stats.db-wal
+
+# OS files
+.DS_Store
+
+# Env
+.env
+config.toml
