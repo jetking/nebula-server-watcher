@@ -118,10 +118,10 @@
 
     <div class="container">
         <div id="vps-info" class="info-grid">
-            <div class="info-card"><span class="info-label">Node Name</span><span id="info-name" class="info-val">-</span></div>
             <div class="info-card"><span class="info-label">Network IP</span><span id="info-ip" class="info-val" style="font-family: monospace;">-</span></div>
             <div class="info-card"><span class="info-label">Geolocation</span><span id="info-country" class="info-val">-</span></div>
             <div class="info-card"><span class="info-label">Internal ID</span><span id="info-id" class="info-val" style="font-size: 0.75rem; opacity: 0.5;">-</span></div>
+            <div class="info-card"><span class="info-label">Node Remarks</span><span id="info-remarks" class="info-val" style="font-size: 0.875rem; color: var(--text-muted);">-</span></div>
         </div>
 
         <div class="card">
@@ -219,10 +219,10 @@
         async function updateView() {
             const vps = vpsList.find(v => v.id === currentID);
             if (vps) {
-                document.getElementById('info-name').textContent = vps.name;
                 document.getElementById('info-ip').textContent = vps.ip;
                 document.getElementById('info-country').textContent = vps.country;
                 document.getElementById('info-id').textContent = vps.id;
+                document.getElementById('info-remarks').textContent = vps.remarks || 'None';
                 document.getElementById('chart-title').textContent = vps.name + ' Performance';
             }
 
