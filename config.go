@@ -27,7 +27,8 @@ type TGConfig struct {
 }
 
 type ServerConfig struct {
-	Port int `toml:"port" json:"port"`
+	Port       int  `toml:"port" json:"port"`
+	Privileged bool `toml:"privileged" json:"privileged"`
 }
 
 type VPSConfig struct {

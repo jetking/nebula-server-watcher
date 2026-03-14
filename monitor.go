@@ -130,8 +130,8 @@ func (m *Monitor) pingSession(ip string, duration time.Duration) []time.Duration
 	}
 
 	// On some systems (like macOS or Linux without root), SetPrivileged(true) might be needed
-	// or false to use UDP. Let's try privileged=false first for better compatibility.
-	pinger.SetPrivileged(false)
+	// or false to use UDP. Let's use the configuration from config.toml.
+	pinger.SetPrivileged(m.config.Server.Privileged)
 
 	var latencies []time.Duration
 	var mu sync.Mutex

@@ -1,5 +1,6 @@
 [server]
 port = 8080
+privileged = true        # Set true for CAP_NET_RAW / root (needed if sysctl fails)
 
 [alert]
 threshold = 100.0          # Median latency threshold in ms
