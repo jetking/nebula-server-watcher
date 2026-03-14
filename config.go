@@ -8,9 +8,22 @@ import (
 )
 
 type Config struct {
-	Server  ServerConfig `toml:"server" json:"server"`
-	VPSList []VPSConfig  `toml:"vps_list" json:"vps_list"`
-	Password string      `json:"-"` // Not in TOML, loaded from .env
+	Server   ServerConfig `toml:"server" json:"server"`
+	VPSList  []VPSConfig  `toml:"vps_list" json:"vps_list"`
+	Alert    AlertConfig  `toml:"alert" json:"alert"`
+	Telegram TGConfig     `toml:"telegram" json:"-"` // Added to TOML, hidden in JSON
+	Password string       `json:"-"`                 // Loaded from .env
+}
+
+type AlertConfig struct {
+	Threshold          float64 `toml:"threshold" json:"threshold"`
+	ConsecutiveCount   int     `toml:"consecutive_count" json:"consecutive_count"`
+	CooldownMinutes    int     `toml:"cooldown_minutes" json:"cooldown_minutes"`
+}
+
+type TGConfig struct {
+	Token  string `toml:"token"`
+	ChatID string `toml:"chat_id"`
 }
 
 type ServerConfig struct {
@@ -43,6 +56,14 @@ func LoadConfig(path string) (*Config, error) {
 	cfg.Password = os.Getenv("WATCHER_PASSWORD")
 	if cfg.Password == "" {
 		cfg.Password = "change_me" // Default
+	}
+
+	// Allow environment variables to override TOML config
+	if envToken := os.Getenv("TG_BOT_TOKEN"); envToken != "" {
+		cfg.Telegram.Token = envToken
+	}
+	if envChatID := os.Getenv("TG_CHAT_ID"); envChatID != "" {
+		cfg.Telegram.ChatID = envChatID
 	}
 
 	return &cfg, nil

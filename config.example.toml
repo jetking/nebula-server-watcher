@@ -1,7 +1,17 @@
 [server]
-port = 9090
+port = 8080
+
+[alert]
+threshold = 100.0          # Median latency threshold in ms
+consecutive_count = 3      # Consecutive intervals (minutes) > threshold to trigger alert
+cooldown_minutes = 30     # Cooldown minutes between notifications for the same node
+
+[telegram]
+token = "your_bot_token"
+chat_id = "your_chat_id"
 
 [[vps_list]]
+
 id = "example-node-1"
 name = "Example Server 1"
 ip = "1.1.1.1"

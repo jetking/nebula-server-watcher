@@ -12,7 +12,7 @@ A VPS latency monitoring tool written in Golang with SQLite and a web dashboard.
 
 ## How to Run
 
-1.  Edit `config.toml` to add your VPS list and set the port.
+1.  Edit `config.toml` to add your VPS list, alert settings, and Telegram bot details.
 2.  Create a `.env` file and set your password:
     ```bash
     echo "WATCHER_PASSWORD=your_secret_password" > .env
@@ -34,6 +34,13 @@ A VPS latency monitoring tool written in Golang with SQLite and a web dashboard.
 ```toml
 [server]
 port = 8080
+
+[alert]
+threshold = 100.0 # Median latency threshold in ms
+
+[telegram]
+token = "your_bot_token"
+chat_id = "your_chat_id"
 
 [[vps_list]]
 id = "vps1"
