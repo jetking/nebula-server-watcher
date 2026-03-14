@@ -51,6 +51,7 @@ func (ws *WebServer) Start(addr string) error {
 	{
 		api.GET("/vps", ws.handleGetVPS)
 		api.GET("/stats", ws.handleGetStats)
+		api.GET("/uptime", ws.handleGetUptime)
 	}
 
 	// 显式路由：不使用 StaticFS 避免任何可能的路径冲突
@@ -79,13 +80,17 @@ func (ws *WebServer) handleGetVPS(c *gin.Context) {
 func (ws *WebServer) handleGetStats(c *gin.Context) {
 	vpsID := c.Query("vps_id")
 	since := c.Query("since")
+	start := c.Query("start")
+	end := c.Query("end")
 
 	query := ws.db.Model(&LatencyRecord{})
 	if vpsID != "" {
 		query = query.Where("vps_id = ?", vpsID)
 	}
 
-	if since != "" {
+	if start != "" && end != "" {
+		query = query.Where("timestamp BETWEEN ? AND ?", start, end)
+	} else if since != "" {
 		d, err := time.ParseDuration(since)
 		if err == nil {
 			query = query.Where("timestamp > ?", time.Now().Add(-d))
@@ -101,4 +106,43 @@ func (ws *WebServer) handleGetStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, stats)
+}
+
+func (ws *WebServer) handleGetUptime(c *gin.Context) {
+	vpsID := c.Query("vps_id")
+	if vpsID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "vps_id is required"})
+		return
+	}
+
+	days := 90
+	since := time.Now().AddDate(0, 0, -days)
+
+	type DailyStatus struct {
+		Date        string  `json:"date"`
+		AvgMedian   float64 `json:"avg_median"`
+		RedCount    int     `json:"red_count"`    // > 200ms
+		YellowCount int     `json:"yellow_count"` // 50-200ms
+	}
+
+	var results []DailyStatus
+	// 针对 SQLite 使用 strftime 函数进行按日期分组
+	err := ws.db.Raw(`
+		SELECT 
+			strftime('%Y-%m-%d', timestamp) as date,
+			AVG(median_latency) as avg_median,
+			SUM(CASE WHEN median_latency > 200 THEN 1 ELSE 0 END) as red_count,
+			SUM(CASE WHEN median_latency >= 50 AND median_latency <= 200 THEN 1 ELSE 0 END) as yellow_count
+		FROM latency_records
+		WHERE vps_id = ? AND timestamp > ?
+		GROUP BY date
+		ORDER BY date ASC
+	`, vpsID, since).Scan(&results).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
 }

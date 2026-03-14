@@ -92,6 +92,45 @@
         tr:hover td { background: rgba(255, 255, 255, 0.03); }
         .latency-badge { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
 
+        /* Uptime Wall Styles */
+        .uptime-card {
+            background: var(--card-bg); border: 1px solid var(--card-border);
+            border-radius: 1.5rem; padding: 1.5rem 2rem; margin-bottom: 2rem;
+        }
+        .uptime-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+        .uptime-title { font-size: 1rem; font-weight: 700; color: var(--text-main); }
+        .uptime-legend { display: flex; gap: 1rem; font-size: 0.75rem; color: var(--text-muted); }
+        .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+        .uptime-wall {
+            display: flex; gap: 3px; padding-top: 45px; padding-bottom: 10px;
+            justify-content: space-between;
+            position: relative;
+        }
+        .brick {
+            flex: 1; min-width: 4px; max-width: 10px; height: 32px; border-radius: 2px;
+            cursor: pointer; position: relative; transition: all 0.2s;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .brick:hover { transform: scaleY(1.3); z-index: 100; filter: brightness(1.2); }
+        
+        .status-green { background: var(--success) !important; box-shadow: 0 0 8px rgba(52, 211, 153, 0.15); }
+        .status-yellow { background: var(--warning) !important; box-shadow: 0 0 8px rgba(251, 191, 36, 0.15); }
+        .status-red { background: var(--danger) !important; box-shadow: 0 0 8px rgba(251, 113, 133, 0.15); }
+        .status-gray { background: rgba(255, 255, 255, 0.08) !important; }
+
+        .tooltip {
+            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background: #1e293b; color: white; padding: 10px 14px; border-radius: 10px;
+            font-size: 0.75rem; white-space: nowrap; visibility: hidden; opacity: 0;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 15px 30px -5px rgba(0,0,0,0.6);
+            z-index: 1000; pointer-events: none; border: 1px solid var(--card-border);
+            backdrop-filter: blur(10px);
+        }
+        .brick:hover .tooltip { visibility: visible; opacity: 1; bottom: 150%; }
+
         #refresh-timer { font-size: 0.8125rem; color: var(--text-muted); }
 
         footer {
@@ -128,6 +167,21 @@
             <div class="info-card"><span class="info-label">Node Remarks</span><span id="info-remarks" class="info-val" style="font-size: 0.875rem; color: var(--text-muted);">-</span></div>
         </div>
 
+        <!-- Uptime Status Wall -->
+        <div class="uptime-card">
+            <div class="uptime-header">
+                <div class="uptime-title">Cumulative Online Status (90 Days)</div>
+                <div class="uptime-legend">
+                    <div class="legend-item"><div class="legend-dot status-green"></div><span>Optimal</span></div>
+                    <div class="legend-item"><div class="legend-dot status-yellow"></div><span>Med Jitter</span></div>
+                    <div class="legend-item"><div class="legend-dot status-red"></div><span>Unstable</span></div>
+                </div>
+            </div>
+            <div id="uptime-wall" class="uptime-wall">
+                <!-- Bricks will be rendered here -->
+            </div>
+        </div>
+
         <div class="card">
             <div class="section-header">
                 <div class="section-title">
@@ -135,6 +189,7 @@
                     <p>Cross-period performance metrics</p>
                 </div>
                 <div>
+                    <button id="reset-btn" onclick="updateView()" style="display: none; background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.5rem; cursor: pointer; font-weight: 600; margin-right: 0.5rem;">Reset to Default</button>
                     <select id="time-select" onchange="updateView()">
                         <option value="1h">Last 1 Hour</option>
                         <option value="6h">Last 6 Hours</option>
@@ -220,23 +275,104 @@
             setInterval(updateView, 60000);
         }
 
-        async function updateView() {
+        async function updateView(dateFilter = null) {
             const vps = vpsList.find(v => v.id === currentID);
             if (vps) {
                 document.getElementById('info-ip').textContent = vps.ip;
                 document.getElementById('info-country').textContent = vps.country;
                 document.getElementById('info-id').textContent = vps.id;
                 document.getElementById('info-remarks').textContent = vps.remarks || 'None';
-                document.getElementById('chart-title').textContent = vps.name + ' Performance';
+                
+                let title = vps.name + ' Performance';
+                if (dateFilter) {
+                    title += ` (${dateFilter})`;
+                    // Hide the time select when viewing a specific date
+                    document.getElementById('time-select').style.display = 'none';
+                    document.getElementById('reset-btn').style.display = 'inline-block';
+                } else {
+                    document.getElementById('time-select').style.display = 'inline-block';
+                    document.getElementById('reset-btn').style.display = 'none';
+                }
+                document.getElementById('chart-title').textContent = title;
             }
 
-            const since = document.getElementById('time-select').value;
-            const stats = await apiFetch(`/api/stats?vps_id=${currentID}&since=${since}`);
-            if (!stats) return;
+            let statsUrl = `/api/stats?vps_id=${currentID}`;
+            if (dateFilter) {
+                statsUrl += `&start=${dateFilter} 00:00:00&end=${dateFilter} 23:59:59`;
+            } else {
+                const since = document.getElementById('time-select').value;
+                statsUrl += `&since=${since}`;
+            }
 
-            renderChart(stats);
-            renderTable(stats.slice(0, 100));
+            const stats = await apiFetch(statsUrl);
+
+            let uptimeData = null;
+            try {
+                uptimeData = await apiFetch(`/api/uptime?vps_id=${currentID}`);
+            } catch (e) { console.error('Uptime fetch failed:', e); }
+
+            if (stats) {
+                renderChart(stats);
+                renderTable(stats.slice(0, 100));
+            }
+            if (uptimeData) {
+                renderUptime(uptimeData);
+            } else {
+                renderUptime([]); // Render empty bricks
+            }
             document.getElementById('refresh-timer').textContent = 'Last synced: ' + new Date().toLocaleTimeString();
+        }
+
+        function renderUptime(data) {
+            console.log('Rendering uptime with data:', data);
+            const container = document.getElementById('uptime-wall');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            const dataMap = {};
+            data.forEach(d => dataMap[d.date] = d);
+
+            const today = new Date();
+            // Start from 89 days ago to today
+            for (let i = 89; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(today.getDate() - i);
+                
+                // Format date as YYYY-MM-DD in local time
+                const Y = date.getFullYear();
+                const M = String(date.getMonth() + 1).padStart(2, '0');
+                const D = String(date.getDate()).padStart(2, '0');
+                const dateStr = `${Y}-${M}-${D}`;
+                
+                const dayData = dataMap[dateStr];
+                const brick = document.createElement('div');
+                brick.className = 'brick';
+                
+                let statusClass = 'status-gray';
+                let statusText = 'No data';
+                let detail = '';
+
+                if (dayData) {
+                    if (dayData.red_count >= 5) {
+                        statusClass = 'status-red';
+                        statusText = 'Unstable';
+                    } else if (dayData.yellow_count >= 5) {
+                        statusClass = 'status-yellow';
+                        statusText = 'Medium Jitter';
+                    } else {
+                        statusClass = 'status-green';
+                        statusText = 'Optimal';
+                    }
+                    detail = `<br>Avg Median: ${dayData.avg_median.toFixed(1)}ms<br>Alerts: ${dayData.red_count} (R), ${dayData.yellow_count} (Y)`;
+                    brick.onclick = () => updateView(dateStr);
+                } else {
+                    brick.style.cursor = 'default';
+                }
+
+                brick.classList.add(statusClass);
+                brick.innerHTML = `<div class="tooltip"><strong>${dateStr}</strong><br>Status: ${statusText}${detail}</div>`;
+                container.appendChild(brick);
+            }
         }
 
         function renderChart(stats) {
